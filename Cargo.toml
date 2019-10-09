@@ -1,6 +1,6 @@
 [package]
 name = "ggwp"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["pakoito <jueces.jus@gmail.com>"]
 edition = "2018"
 description = "A port of GGPO (https://github.com/pond3r/ggpo) to Rust"
