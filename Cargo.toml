@@ -11,3 +11,7 @@ homepage = "https://github.com/pakoito/ggwp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+
+[lib]
+name = "ggwp"
+crate-type = ["dylib"]
