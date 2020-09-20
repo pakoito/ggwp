@@ -4,6 +4,8 @@
 #![allow(non_camel_case_types)]
 use std::any::Any;
 
+TODO synctest.cpp
+
 mod opaque {
     use super::*;
     pub trait Opaque: Drop {
