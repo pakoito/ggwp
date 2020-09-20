@@ -6,60 +6,156 @@ use std::any::Any;
 
 mod opaque {
     use super::*;
-    pub trait Opaque {
-        fn do_poll(timeout: i32) -> GGPOErrorCode {
+    pub trait Opaque: Drop {
+        fn do_poll(&self, timeout: i32) -> GGPOErrorCode {
             GGPO_OK
         }
-        fn add_player(player: &GGPOPlayer) -> GGPOResult<GGPOPlayerHandle>;
-        fn add_local_input(player: GGPOPlayerHandle, values: &dyn Any, size: i32) -> GGPOErrorCode;
-        fn sync_input(values: &dyn Any, size: i32, disconnect_flags: &i32) -> GGPOErrorCode;
-        fn increment_frame() -> GGPOErrorCode {
+        fn add_player(
+            &self,
+            player: &GGPOPlayer,
+            handle: &GGPOPlayerHandle,
+        ) -> GGPOResult<GGPOPlayerHandle>;
+        fn add_local_input(
+            &self,
+            player: GGPOPlayerHandle,
+            values: &dyn Any,
+            size: i32,
+        ) -> GGPOErrorCode;
+        fn sync_input(&self, values: &dyn Any, size: i32, disconnect_flags: &i32) -> GGPOErrorCode;
+        fn increment_frame(&self) -> GGPOErrorCode {
             GGPO_OK
         }
-        fn chat(text: &str) -> GGPOErrorCode {
+        fn chat(&self, text: &str) -> GGPOErrorCode {
             GGPO_OK
         }
-        fn disconnect_player(handle: GGPOPlayerHandle) -> GGPOErrorCode {
+        fn disconnect_player(&self, handle: GGPOPlayerHandle) -> GGPOErrorCode {
             GGPO_OK
         }
-        fn get_network_stats(stats: &GGPONetworkStats, handle: GGPOPlayerHandle) -> GGPOErrorCode {
-            GGPO_OK
+        fn get_network_stats(&self, handle: GGPOPlayerHandle) -> GGPOResult<GGPONetworkStats> {
+            Err(GGPO_OK) // TODO
         }
-        fn logv(msg: &str) -> GGPOErrorCode {
-            println!("{}", msg);
-            GGPO_OK
+        fn logv(&self, msg: &str) {
+            println!("{}", msg)
         }
-        fn set_frame_delay(player: GGPOPlayerHandle, delay: i32) -> GGPOErrorCode {
+        fn set_frame_delay(&self, player: GGPOPlayerHandle, delay: i32) -> GGPOErrorCode {
             GGPOErrorCode::GGPO_ERRORCODE_UNSUPPORTED
         }
-        fn set_disconnect_timeout(timeout: i32) -> GGPOErrorCode {
+        fn set_disconnect_timeout(&self, timeout: i32) -> GGPOErrorCode {
             GGPOErrorCode::GGPO_ERRORCODE_UNSUPPORTED
         }
-        fn set_disconnect_notify_start(timeout: i32) -> GGPOErrorCode {
+        fn set_disconnect_notify_start(&self, timeout: i32) -> GGPOErrorCode {
             GGPOErrorCode::GGPO_ERRORCODE_UNSUPPORTED
         }
     }
 }
 
-pub trait IGGPOSession: opaque::Opaque {}
+pub trait GGPOSession: opaque::Opaque {}
 
-struct P2PSession;
+struct P2PSession {
+    cb: Box<dyn GGPOSessionCallbacks>,
+    num_players: i32,
+    input_size: i32,
+    game_name: String,
+    local_port: u8,
+}
+
+impl Drop for P2PSession {
+    fn drop(&mut self) {}
+}
 
 impl opaque::Opaque for P2PSession {
-    fn add_player(player: &GGPOPlayer) -> GGPOResult<GGPOPlayerHandle> {
+    fn add_player(
+        &self,
+        player: &GGPOPlayer,
+        handle: &GGPOPlayerHandle,
+    ) -> GGPOResult<GGPOPlayerHandle> {
         Ok(0)
     }
-    fn add_local_input(player: GGPOPlayerHandle, values: &dyn Any, size: i32) -> GGPOErrorCode {
+    fn add_local_input(
+        &self,
+        player: GGPOPlayerHandle,
+        values: &dyn Any,
+        size: i32,
+    ) -> GGPOErrorCode {
         GGPO_OK
     }
-    fn sync_input(values: &dyn Any, size: i32, disconnect_flags: &i32) -> GGPOErrorCode {
+    fn sync_input(&self, values: &dyn Any, size: i32, disconnect_flags: &i32) -> GGPOErrorCode {
         GGPO_OK
     }
 }
 
-impl IGGPOSession for P2PSession {}
+impl GGPOSession for P2PSession {}
 
-pub type GGPOSession = impl IGGPOSession;
+struct SyncTestSession {
+    cb: Box<dyn GGPOSessionCallbacks>,
+    num_players: i32,
+    game_name: String,
+    frames: i32,
+}
+
+impl Drop for SyncTestSession {
+    fn drop(&mut self) {}
+}
+
+impl opaque::Opaque for SyncTestSession {
+    fn add_player(
+        &self,
+        player: &GGPOPlayer,
+        handle: &GGPOPlayerHandle,
+    ) -> GGPOResult<GGPOPlayerHandle> {
+        Ok(0)
+    }
+    fn add_local_input(
+        &self,
+        player: GGPOPlayerHandle,
+        values: &dyn Any,
+        size: i32,
+    ) -> GGPOErrorCode {
+        GGPO_OK
+    }
+    fn sync_input(&self, values: &dyn Any, size: i32, disconnect_flags: &i32) -> GGPOErrorCode {
+        GGPO_OK
+    }
+}
+
+impl GGPOSession for SyncTestSession {}
+
+struct SpectatorSession {
+    cb: Box<dyn GGPOSessionCallbacks>,
+    num_players: i32,
+    game_name: String,
+    local_port: u8,
+    input_size: i32,
+    host_ip: String,
+    host_port: u8,
+}
+
+impl Drop for SpectatorSession {
+    fn drop(&mut self) {}
+}
+
+impl opaque::Opaque for SpectatorSession {
+    fn add_player(
+        &self,
+        player: &GGPOPlayer,
+        handle: &GGPOPlayerHandle,
+    ) -> GGPOResult<GGPOPlayerHandle> {
+        Ok(0)
+    }
+    fn add_local_input(
+        &self,
+        player: GGPOPlayerHandle,
+        values: &dyn Any,
+        size: i32,
+    ) -> GGPOErrorCode {
+        GGPO_OK
+    }
+    fn sync_input(&self, values: &dyn Any, size: i32, disconnect_flags: &i32) -> GGPOErrorCode {
+        GGPO_OK
+    }
+}
+
+impl GGPOSession for SpectatorSession {}
 
 pub type GGPOPlayerHandle = i32;
 
@@ -177,13 +273,13 @@ pub struct GGPOEvent {
 }
 
 pub trait GGPOSessionCallbacks {
-    fn begin_game(game: &str);
-    fn save_game_state(buffer: &Vec<u8>, len: &i32, checksum: &i32, frame: i32);
-    fn load_game_state(buffer: Vec<u8>, len: i32);
-    fn log_game_state(filename: &str, buffer: Vec<u8>, len: i32);
-    fn free_buffer(buffer: &dyn Any);
-    fn advance_frame(flags: i32);
-    fn on_event(info: &GGPOEvent);
+    fn begin_game(&self, game: &str);
+    fn save_game_state(&self, buffer: &Vec<u8>, len: &i32, checksum: &i32, frame: i32);
+    fn load_game_state(&self, buffer: Vec<u8>, len: i32);
+    fn log_game_state(&self, filename: &str, buffer: Vec<u8>, len: i32);
+    fn free_buffer(&self, buffer: &dyn Any);
+    fn advance_frame(&self, flags: i32);
+    fn on_event(&self, info: &GGPOEvent);
 }
 
 pub struct GGPONetworkStatsNetwork {
@@ -203,112 +299,133 @@ pub enum GGPONetworkStats {
     Timesync(GGPONetworkStatsTimesync),
 }
 
-// API
+// C-style API
 pub fn ggpo_start_session(
-    cb: &impl GGPOSessionCallbacks,
+    cb: impl GGPOSessionCallbacks + 'static,
     game: &str,
     num_players: i32,
     input_size: i32,
-    localport: u8,
-) -> GGPOResult<Box<GGPOSession>> {
-    Ok(Box::new(P2PSession))
+    local_port: u8,
+) -> GGPOResult<Box<impl GGPOSession>> {
+    Ok(Box::new(P2PSession {
+        cb: Box::new(cb),
+        game_name: game.to_owned(),
+        input_size,
+        local_port,
+        num_players,
+    }))
 }
 
 pub fn ggpo_add_player(
-    session: &mut GGPOSession,
-    stats: &GGPONetworkStats,
+    session: &mut impl GGPOSession,
+    player: &GGPOPlayer,
+    handle: &GGPOPlayerHandle,
 ) -> GGPOResult<GGPOPlayerHandle> {
-    Ok(0)
+    session.add_player(player, handle)
 }
 
 pub fn ggpo_start_synctest(
-    session: &mut GGPOSession,
-    cb: &impl GGPOSessionCallbacks,
+    cb: impl GGPOSessionCallbacks + 'static,
     game: &str,
     num_players: i32,
     input_size: i32,
     frames: i32,
-) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+) -> GGPOResult<impl GGPOSession> {
+    Ok(SyncTestSession {
+        cb: Box::new(cb),
+        num_players,
+        game_name: game.to_owned(),
+        frames,
+    })
 }
 
 pub fn ggpo_start_spectating(
-    session: &mut GGPOSession,
-    cb: &impl GGPOSessionCallbacks,
+    cb: impl GGPOSessionCallbacks + 'static,
     game: &str,
     num_players: i32,
     input_size: i32,
     local_port: u8,
     host_ip: &str,
     host_port: u8,
-) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+) -> GGPOResult<impl GGPOSession> {
+    Ok(SpectatorSession {
+        cb: Box::new(cb),
+        num_players,
+        game_name: game.to_owned(),
+        input_size,
+        local_port,
+        host_ip: host_ip.to_owned(),
+        host_port,
+    })
 }
 
-pub fn ggpo_close_session(session: &mut GGPOSession) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+pub fn ggpo_close_session(session: &mut impl GGPOSession) -> GGPOErrorCode {
+    drop(session);
+    GGPO_OK
 }
 
 pub fn ggpo_set_frame_delay(
-    session: &mut GGPOSession,
+    session: &mut impl GGPOSession,
     player: GGPOPlayerHandle,
     frame_delay: i32,
 ) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+    session.set_frame_delay(player, frame_delay)
 }
 
-pub fn ggpo_idle(session: &mut GGPOSession, timeout: i32) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+pub fn ggpo_idle(session: &mut impl GGPOSession, timeout: i32) -> GGPOErrorCode {
+    session.do_poll(timeout)
 }
 
 pub fn ggpo_add_local_input(
-    session: &mut GGPOSession,
+    session: &mut impl GGPOSession,
     player: GGPOPlayerHandle,
     values: &dyn Any,
     size: i32,
 ) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+    session.add_local_input(player, values, size)
 }
 pub fn ggpo_synchronize_input(
-    session: &mut GGPOSession,
+    session: &mut impl GGPOSession,
     values: &dyn Any,
     size: i32,
     disconnect_flags: &i32,
 ) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+    session.sync_input(values, size, disconnect_flags)
 }
 
 pub fn ggpo_disconnect_player(
-    session: &mut GGPOSession,
+    session: &mut impl GGPOSession,
     player: GGPOPlayerHandle,
 ) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+    session.disconnect_player(player)
 }
 
-pub fn ggpo_advance_frame(session: &mut GGPOSession) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+pub fn ggpo_advance_frame(session: &mut impl GGPOSession) -> GGPOErrorCode {
+    session.increment_frame()
 }
 
 pub fn ggpo_get_network_stats(
-    session: &mut GGPOSession,
-    player: GGPOPlayerHandle,
-    stats: &mut GGPONetworkStats, // out parameter
+    session: &mut impl GGPOSession,
+    handle: GGPOPlayerHandle,
+) -> GGPOResult<GGPONetworkStats> {
+    session.get_network_stats(handle)
+}
+
+pub fn ggpo_set_disconnect_timeout(session: &mut impl GGPOSession, timeout: i32) -> GGPOErrorCode {
+    session.set_disconnect_timeout(timeout)
+}
+
+pub fn ggpo_set_disconnect_notify_start(
+    session: &mut impl GGPOSession,
+    timeout: i32,
 ) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+    session.set_disconnect_notify_start(timeout)
 }
 
-pub fn ggpo_set_disconnect_timeout(session: &mut GGPOSession, timeout: i32) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
+pub fn ggpo_log(session: &mut impl GGPOSession, message: &str) {
+    session.logv(message)
 }
 
-pub fn ggpo_set_disconnect_notify_start(session: &mut GGPOSession, timeout: i32) -> GGPOErrorCode {
-    GGPOErrorCode::GGPO_ERRORCODE_SUCCESS
-}
-
-pub fn ggpo_log(_session: &mut GGPOSession, message: &str) {
-    println!("{}", message)
-}
-
-pub fn ggpo_logv(_session: &mut GGPOSession, message: &str) {
-    println!("{}", message)
+pub fn ggpo_logv(session: &mut impl GGPOSession, message: &str) {
+    session.logv(message)
 }
