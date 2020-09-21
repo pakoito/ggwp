@@ -6,6 +6,11 @@ use std::any::Any;
 
 TODO synctest.cpp
 
+#[test]
+fn main_test() {
+    println!("PATATAS {}", ggpo_succeeded(GGPO_OK));
+}
+
 mod opaque {
     use super::*;
     pub trait Opaque: Drop {
