@@ -11,6 +11,8 @@ homepage = "https://github.com/pakoito/ggwp"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+heapless = "0.5.6"
+ringbuf = "0.2.2"
 
 [lib]
 name = "ggwp"
