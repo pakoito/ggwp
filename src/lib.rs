@@ -8,8 +8,7 @@ use std::cell::Cell;
 use std::path::Path;
 
 //continue synctest.cpp
-//sync.h
-//sync.cpp
+sync.cpp#init
 
 #[test]
 fn main_test() {
