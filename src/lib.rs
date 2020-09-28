@@ -4,7 +4,7 @@
 #![allow(non_camel_case_types)]
 use ringbuf::{Consumer, Producer, RingBuffer};
 use std::any::Any;
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::path::Path;
 
 //continue synctest.cpp
@@ -74,7 +74,7 @@ struct SyncTestSession {
     last_verified: Cell<i32>,
     current_input: Cell<GameInput>,
     last_input: Cell<GameInput>,
-    saved_frames: RefCell<(Producer<SavedInfo>, Consumer<SavedInfo>)>,
+    saved_frames: Cell<(Producer<SavedInfo>, Consumer<SavedInfo>)>,
 }
 
 impl Drop for SyncTestSession {
@@ -549,7 +549,7 @@ pub fn ggpo_start_synctest(
         sync: GGPOSync,
         current_input: Cell::new(GameInput::default()),
         last_input: Cell::new(GameInput::default()),
-        saved_frames: RefCell::new(RingBuffer::new(32).split()),
+        saved_frames: Cell::new(RingBuffer::new(32).split()),
     };
     sess.cb.begin_game(game);
     Ok(sess)
