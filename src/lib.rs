@@ -2,14 +2,14 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(non_camel_case_types)]
-use ringbuf::RingBuffer;
+use ringbuf::{Consumer, Producer, RingBuffer};
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::path::Path;
 
-continue synctest.cpp
-sync.h
-sync.cpp
+//continue synctest.cpp
+//sync.h
+//sync.cpp
 
 #[test]
 fn main_test() {
@@ -74,7 +74,7 @@ struct SyncTestSession {
     last_verified: Cell<i32>,
     current_input: Cell<GameInput>,
     last_input: Cell<GameInput>,
-    saved_frames: RefCell<RingBuffer<SavedInfo>>,
+    saved_frames: RefCell<(Producer<SavedInfo>, Consumer<SavedInfo>)>,
 }
 
 impl Drop for SyncTestSession {
@@ -130,10 +130,14 @@ impl opaque::Opaque for SyncTestSession {
         disconnect_flags: &mut i32,
     ) -> GGPOErrorCode {
         let old_input = if self.rollingback.get() {
-            // TODO return head
-            //let (_, mut cons) = self.saved_frames.split();
-            //cons.head().input.clone()
-            todo!();
+            let (_, cons) = self.saved_frames.get_mut();
+            // This is SHIIIT. SHEEEEEEEEIT
+            let mut first: Option<GameInput> = None;
+            cons.for_each(|e| match first {
+                None => first = Some(e.input.clone()),
+                Some(_) => {}
+            });
+            first.expect("Buffer should have values")
         } else {
             if self.sync.get_frame_count() == 0 {
                 self.sync.save_current_frame();
@@ -167,23 +171,20 @@ impl opaque::Opaque for SyncTestSession {
             buf: last_saved_frame.buf.clone(),
             ..*last_saved_frame
         };
-        let a: &mut RingBuffer<SavedInfo> = self.saved_frames.get_mut();
-        // TODO fix this
-        let (b, _) = a.split();
+        let (producer, consumer) = self.saved_frames.get_mut();
         if frame - self.last_verified.get() == self.check_distance {
             self.sync.load_frame(self.last_verified.get());
             self.rollingback.set(true);
-            let mut size = 3;
-            while size > 0 {
+            while !producer.is_empty() {
                 self.cb.advance_frame(0);
 
-                let mut info = self
-                    .saved_frames
-                    .get_mut()
-                    .split()
-                    .1
-                    .pop()
-                    .expect("Buffer was empty");
+                let maybe_info = consumer.pop();
+                let mut info = match maybe_info {
+                    None => {
+                        continue;
+                    }
+                    Some(i) => i,
+                };
                 if info.frame != self.sync.get_frame_count() {
                     panic!(
                         "Frame number {} does not match saved frame number {}",
@@ -199,7 +200,6 @@ impl opaque::Opaque for SyncTestSession {
                     );
                 }
                 info.buf.clear();
-                size = 5;
             }
             self.last_verified.set(frame);
             self.rollingback.set(false);
@@ -549,7 +549,7 @@ pub fn ggpo_start_synctest(
         sync: GGPOSync,
         current_input: Cell::new(GameInput::default()),
         last_input: Cell::new(GameInput::default()),
-        saved_frames: RefCell::new(RingBuffer::new(32)),
+        saved_frames: RefCell::new(RingBuffer::new(32).split()),
     };
     sess.cb.begin_game(game);
     Ok(sess)
