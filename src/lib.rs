@@ -17,6 +17,188 @@ fn main_test() {
 }
 
 /////////////////////////
+/// Udp Message
+/////////////////////////
+
+struct ConnectStatus {
+    disconnected: u32,
+    last_frame: i32,
+}
+
+impl Default for ConnectStatus {
+    fn default() -> Self {
+        ConnectStatus {
+            disconnected: 1,
+            last_frame: 31,
+        }
+    }
+}
+
+/////////////////////////
+/// InputQueue
+/////////////////////////
+
+struct InputQueue;
+
+/////////////////////////
+/// Sync
+/////////////////////////
+
+const MAX_PREDICTION_FRAMES: usize = 8;
+
+struct GGPOSync {
+    cb: Cell<Option<Box<dyn GGPOSessionCallbacks>>>,
+    savedstate: Cell<Option<GGPOSyncSavedState>>,
+    config: Cell<Option<GGPOSyncConfig>>,
+    framecount: i32,
+    rollingback: Cell<bool>,
+    last_confirmed_frame: Cell<i32>,
+    max_prediction_frames: i32,
+    input_queues: Cell<Option<Vec<InputQueue>>>,
+    event_queue: Cell<(Producer<GGPOSyncEvent>, Consumer<GGPOSyncEvent>)>,
+    local_connect_status: ConnectStatus,
+}
+
+struct GGPOSyncConfig {
+    cb: Box<dyn GGPOSessionCallbacks>,
+    num_prediction_frames: i32,
+    num_players: i32,
+    input_size: i32,
+}
+
+enum GGPOSyncEvent {
+    GameInput,
+}
+
+struct GGPOSyncSavedFrame {
+    buf: Vec<u8>,
+    cbuf: usize,
+    frame: i32,
+    checksum: i32,
+}
+
+impl Default for GGPOSyncSavedFrame {
+    fn default() -> Self {
+        GGPOSyncSavedFrame {
+            buf: Vec::new(),
+            cbuf: 0,
+            frame: -1,
+            checksum: 0,
+        }
+    }
+}
+
+struct GGPOSyncSavedState {
+    frames: [GGPOSyncSavedFrame; MAX_PREDICTION_FRAMES + 2],
+    head: i32,
+}
+
+impl Drop for GGPOSync {
+    fn drop(&mut self) {
+        let saved_state = self.savedstate.get_mut();
+        self.cb.get_mut().into_iter().for_each(|cb| {
+            saved_state.into_iter().for_each(|state| {
+                state.frames.iter().for_each(|frame| {
+                    cb.free_buffer(&frame.buf);
+                })
+            })
+        });
+        self.input_queues.set(None);
+    }
+}
+
+impl GGPOSync {
+    fn new(connect_status: ConnectStatus) -> GGPOSync {
+        GGPOSync {
+            cb: Cell::new(None),
+            config: Cell::new(None),
+            rollingback: Cell::new(false),
+            savedstate: Cell::new(None),
+            framecount: 0,
+            last_confirmed_frame: Cell::new(-1),
+            max_prediction_frames: 0,
+            local_connect_status: connect_status,
+            input_queues: Cell::new(None),
+            event_queue: Cell::new(RingBuffer::new(32).split()),
+        }
+    }
+
+    fn init(&mut self, config: GGPOSyncConfig) {
+        todo!();
+    }
+
+    fn set_last_confirmed_frame(&mut self, frame: i32) {
+        todo!();
+    }
+
+    fn set_frame_delay(&mut self, queue: i32, delay: i32) {
+        todo!();
+    }
+
+    fn add_local_input(&mut self, queue: i32) -> Option<GameInput> {
+        todo!();
+    }
+
+    fn add_remote_input(&mut self, queue: i32) -> Option<GameInput> {
+        todo!();
+    }
+
+    fn get_confirmed_inputs(&mut self, values: &dyn Any, size: usize, frame: i32) -> i32 {
+        todo!();
+    }
+
+    fn synchronize_inputs(&mut self, values: &dyn Any, size: usize) -> i32 {
+        todo!();
+    }
+
+    fn check_simulation(&mut self, timeout: i32) {
+        todo!();
+    }
+
+    fn adjust_simulation(&mut self, seek_to: i32) {
+        todo!();
+    }
+
+    fn increment_frame(&self) {
+        todo!();
+    }
+
+    fn get_frame_count(&self) -> i32 {
+        self.framecount
+    }
+
+    fn in_rollback(&self) -> bool {
+        self.rollingback.get()
+    }
+
+    fn get_event() -> GGPOSyncEvent {
+        todo!();
+    }
+
+    // Protected
+    fn load_frame(&self, frame: i32) {}
+
+    fn save_current_frame(&self) {}
+
+    fn find_saved_frame_index(frame: i32) {}
+
+    fn get_last_saved_frame(&self) -> &SavedInfo {
+        todo!();
+    }
+
+    fn create_queues(config: &GGPOSyncConfig) -> bool {
+        todo!();
+    }
+
+    fn check_simulation_consistency(seek_to: &mut i32) -> bool {
+        todo!();
+    }
+    fn reset_prediction(frame_number: i32) {
+        todo!();
+    }
+}
+
+/////////////////////////
 /// SyncTest
 /////////////////////////
 
@@ -44,22 +226,6 @@ impl GameInput {
         self.bits
             .set([0; GAMEINPUT_MAX_BYTES * GAMEINPUT_MAX_PLAYERS])
     }
-}
-
-struct GGPOSync;
-
-impl GGPOSync {
-    fn save_current_frame(&self) {}
-    fn get_frame_count(&self) -> i32 {
-        0
-    }
-    fn increment_frame(&self) {}
-
-    fn get_last_saved_frame(&self) -> &SavedInfo {
-        todo!();
-    }
-
-    fn load_frame(&self, frame: i32) {}
 }
 
 struct SyncTestSession {
@@ -546,7 +712,7 @@ pub fn ggpo_start_synctest(
         rollingback: Cell::new(false),
         running: Cell::new(false),
         logfp: None,
-        sync: GGPOSync,
+        sync: GGPOSync::new(ConnectStatus::default()),
         current_input: Cell::new(GameInput::default()),
         last_input: Cell::new(GameInput::default()),
         saved_frames: Cell::new(RingBuffer::new(32).split()),
