@@ -8,7 +8,7 @@ use std::cell::Cell;
 use std::path::Path;
 
 //continue synctest.cpp
-sync.cpp#init
+//sync.cpp#init
 
 #[test]
 fn main_test() {
@@ -39,6 +39,14 @@ impl Default for ConnectStatus {
 
 struct InputQueue;
 
+impl InputQueue {
+    fn discard_confirmed_frames(&self, frame: i32) {}
+
+    fn set_frame_delay(&self, delay: i32) {}
+
+    fn add_input(&self, input: GameInput) {}
+}
+
 /////////////////////////
 /// Sync
 /////////////////////////
@@ -46,13 +54,12 @@ struct InputQueue;
 const MAX_PREDICTION_FRAMES: usize = 8;
 
 struct GGPOSync {
-    cb: Cell<Option<Box<dyn GGPOSessionCallbacks>>>,
     savedstate: Cell<Option<GGPOSyncSavedState>>,
     config: Cell<Option<GGPOSyncConfig>>,
-    framecount: i32,
+    framecount: Cell<i32>,
     rollingback: Cell<bool>,
     last_confirmed_frame: Cell<i32>,
-    max_prediction_frames: i32,
+    max_prediction_frames: Cell<i32>,
     input_queues: Cell<Option<Vec<InputQueue>>>,
     event_queue: Cell<(Producer<GGPOSyncEvent>, Consumer<GGPOSyncEvent>)>,
     local_connect_status: ConnectStatus,
@@ -95,10 +102,11 @@ struct GGPOSyncSavedState {
 impl Drop for GGPOSync {
     fn drop(&mut self) {
         let saved_state = self.savedstate.get_mut();
-        self.cb.get_mut().into_iter().for_each(|cb| {
+        // TODO Change to if let. See https://stackoverflow.com/a/27363626/11821486
+        self.config.get_mut().into_iter().for_each(|conf| {
             saved_state.into_iter().for_each(|state| {
                 state.frames.iter().for_each(|frame| {
-                    cb.free_buffer(&frame.buf);
+                    conf.cb.free_buffer(&frame.buf);
                 })
             })
         });
@@ -109,13 +117,12 @@ impl Drop for GGPOSync {
 impl GGPOSync {
     fn new(connect_status: ConnectStatus) -> GGPOSync {
         GGPOSync {
-            cb: Cell::new(None),
             config: Cell::new(None),
             rollingback: Cell::new(false),
             savedstate: Cell::new(None),
-            framecount: 0,
+            framecount: Cell::new(0),
             last_confirmed_frame: Cell::new(-1),
-            max_prediction_frames: 0,
+            max_prediction_frames: Cell::new(0),
             local_connect_status: connect_status,
             input_queues: Cell::new(None),
             event_queue: Cell::new(RingBuffer::new(32).split()),
@@ -123,23 +130,65 @@ impl GGPOSync {
     }
 
     fn init(&mut self, config: GGPOSyncConfig) {
-        todo!();
+        let num_players = config.num_players;
+        let input_size = config.input_size;
+        self.max_prediction_frames.set(config.num_prediction_frames);
+        self.config = Cell::new(Some(config));
+        self.framecount.set(0);
+        self.rollingback.set(true);
+        self.create_queues(num_players, input_size);
     }
 
     fn set_last_confirmed_frame(&mut self, frame: i32) {
-        todo!();
+        self.last_confirmed_frame.set(frame);
+        let conf = self.config.get_mut().as_ref();
+        let num_players = conf.expect("Config is set").num_players as usize;
+        if self.last_confirmed_frame.get() > 0 {
+            if let Some(ref mut input_queues) = self.input_queues.get_mut() {
+                for i in 0..num_players {
+                    if let Some(q) = input_queues.get_mut(i) {
+                        q.discard_confirmed_frames(frame - 1);
+                    }
+                }
+            }
+        }
     }
 
     fn set_frame_delay(&mut self, queue: i32, delay: i32) {
-        todo!();
+        if let Some(ref mut input_queues) = self.input_queues.get_mut() {
+            if let Some(q) = input_queues.get_mut(queue as usize) {
+                q.set_frame_delay(delay);
+            }
+        }
     }
 
-    fn add_local_input(&mut self, queue: i32) -> Option<GameInput> {
-        todo!();
+    fn add_local_input(&mut self, queue: i32, input: GameInput) -> bool {
+        let frames_behind = self.framecount.get() - self.last_confirmed_frame.get();
+        let max_prediction_frames = self.max_prediction_frames.get();
+        let framecount = self.framecount.get();
+        if framecount >= max_prediction_frames && frames_behind >= max_prediction_frames {
+            return false;
+        }
+        if framecount == 0 {
+            self.save_current_frame();
+        }
+
+        input.frame.set(Some(framecount));
+        if let Some(ref mut input_queues) = self.input_queues.get_mut() {
+            if let Some(q) = input_queues.get_mut(queue as usize) {
+                q.add_input(input);
+                return true;
+            }
+        }
+        false
     }
 
-    fn add_remote_input(&mut self, queue: i32) -> Option<GameInput> {
-        todo!();
+    fn add_remote_input(&mut self, queue: i32, input: GameInput) {
+        if let Some(ref mut input_queues) = self.input_queues.get_mut() {
+            if let Some(q) = input_queues.get_mut(queue as usize) {
+                q.add_input(input)
+            }
+        }
     }
 
     fn get_confirmed_inputs(&mut self, values: &dyn Any, size: usize, frame: i32) -> i32 {
@@ -163,7 +212,7 @@ impl GGPOSync {
     }
 
     fn get_frame_count(&self) -> i32 {
-        self.framecount
+        self.framecount.get()
     }
 
     fn in_rollback(&self) -> bool {
@@ -185,7 +234,7 @@ impl GGPOSync {
         todo!();
     }
 
-    fn create_queues(config: &GGPOSyncConfig) -> bool {
+    fn create_queues(&self, num_players: i32, input_size: i32) -> bool {
         todo!();
     }
 
@@ -215,7 +264,7 @@ struct SavedInfo {
 
 #[derive(Default, Clone)]
 struct GameInput {
-    frame: Option<i32>,
+    frame: Cell<Option<i32>>,
     size: usize,
     bits: Cell<[u8; GAMEINPUT_MAX_BYTES * GAMEINPUT_MAX_PLAYERS]>,
 }
